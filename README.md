@@ -30,6 +30,10 @@ INVENTREE_URL=https://your-inventree-instance.example.com
 INVENTREE_TOKEN=your-api-token-here
 ```
 
+File operations (attachment upload/download, label/report template download) are confined to
+`INVENTREE_MCP_FILES` (default `~/inventree-mcp-files`). Paths are resolved relative to it, and
+anything outside it is rejected. Downloads never overwrite existing files.
+
 ## Usage
 
 ### STDIO mode (default)

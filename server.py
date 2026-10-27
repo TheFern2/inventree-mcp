@@ -9,6 +9,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
 from typing import Any
 
@@ -47,8 +48,9 @@ async def get_client():
             raise RuntimeError(
                 "INVENTREE_URL and INVENTREE_TOKEN must be set in environment"
             )
-        _client = InvenTreeClient(url, token)
-        await _client.connect()
+        client = InvenTreeClient(url, token)
+        await client.connect()
+        _client = client
         logger.info(f"InvenTree client connected to {url}")
     return _client
 
@@ -60,7 +62,8 @@ def _json(data: Any) -> str:
 
 def _error(e: Exception, context: str = "") -> str:
     """Format an actionable error message for the agent."""
-    msg = str(e)
+    # inventree-python embeds request headers (incl. the auth token) in exception text
+    msg = re.sub(r"(Token\s+)[^'\"\s,}]+", r"\1[REDACTED]", str(e))
     if "404" in msg or "not found" in msg.lower():
         hint = "Check that the ID exists. Use the list/search operation first to find valid IDs."
     elif "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower():
@@ -820,6 +823,7 @@ async def label(
     label_type: str = "part",
     template_id: int = None,
     item_ids: list = None,
+    plugin: str = None,
     destination: str = None,
 ) -> str:
     """Label printing and template management in InvenTree.
@@ -831,7 +835,8 @@ async def label(
         label_type: Filter for list_templates (part, stock, location).
         template_id: Label template ID for print/download operations.
         item_ids: List of item IDs to print labels for.
-        destination: File path to save downloaded template to.
+        plugin: Optional printing plugin key (defaults to the server's default label printer).
+        destination: Path relative to INVENTREE_MCP_FILES to save the template to (default: that directory).
 
     Returns:
         JSON string with label templates or print result.
@@ -842,8 +847,7 @@ async def label(
         return _json(await c.label_list_templates(label_type))
 
     elif operation in ("print_part", "print_stock", "print_location"):
-        lt = operation.replace("print_", "")
-        return _json(await c.label_print(lt, template_id, item_ids or []))
+        return _json(await c.label_print(template_id, item_ids or [], plugin))
 
     elif operation == "download_template":
         return _json(await c.label_download_template(template_id, destination))
@@ -866,7 +870,6 @@ async def report(
     operation: str,
     template_id: int = None,
     item_ids: list = None,
-    model_type: str = None,
     destination: str = None,
 ) -> str:
     """Report generation and template management in InvenTree.
@@ -876,9 +879,8 @@ async def report(
     Args:
         operation: One of the operations listed above.
         template_id: Report template ID for print_report/download_template.
-        item_ids: List of item IDs to include in report.
-        model_type: Model type for print_report.
-        destination: File path to save downloaded template to.
+        item_ids: List of item IDs to include in report (must match the template's model type).
+        destination: Path relative to INVENTREE_MCP_FILES to save the template to (default: that directory).
 
     Returns:
         JSON string with report templates or print result.
@@ -889,7 +891,7 @@ async def report(
         return _json(await c.report_list_templates())
 
     elif operation == "print_report":
-        return _json(await c.report_print(template_id, item_ids or [], model_type))
+        return _json(await c.report_print(template_id, item_ids or []))
 
     elif operation == "download_template":
         return _json(await c.report_download_template(template_id, destination))
@@ -930,10 +932,10 @@ async def attachment(
         model_type: Object type (part, stockitem, build, purchaseorder, salesorder, company).
         model_id: Object ID for list/upload/upload_link.
         attachment_id: Attachment ID for download/delete.
-        file_path: Local file path for upload.
+        file_path: Path relative to INVENTREE_MCP_FILES of the file to upload.
         link: URL for upload_link.
         comment: Optional comment for uploads.
-        destination: File path to save downloaded attachment to.
+        destination: Path relative to INVENTREE_MCP_FILES to save the attachment to (default: that directory).
 
     Returns:
         JSON string with attachment data or {"error": "..."}.
@@ -1030,7 +1032,8 @@ if __name__ == "__main__":
     if transport == "sse":
         port = int(sys.argv[2]) if len(sys.argv) > 2 else int(os.getenv("PORT", "3074"))
         logger.info(f"Starting InvenTree MCP Server on SSE port {port}")
-        mcp.run(transport="sse", port=port)
+        mcp.settings.port = port
+        mcp.run(transport="sse")
     else:
         logger.info("Starting InvenTree MCP Server on STDIO")
         mcp.run(transport="stdio")

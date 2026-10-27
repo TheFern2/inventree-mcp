@@ -7,7 +7,9 @@ semaphore to limit concurrent thread usage.
 import asyncio
 import json
 import logging
+import os
 from functools import partial
+from pathlib import Path
 from typing import Any, Optional
 
 from inventree.api import InvenTreeAPI
@@ -20,7 +22,7 @@ from inventree.return_order import ReturnOrder, ReturnOrderLineItem, ReturnOrder
 from inventree.company import Company, Contact, Address, SupplierPart, ManufacturerPart, SupplierPriceBreak
 from inventree.label import LabelTemplate
 from inventree.report import ReportTemplate
-from inventree.base import Attachment
+from inventree.base import Attachment, ParameterTemplate
 from inventree.user import User, Group, Owner
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,24 @@ async def run_sync(fn, *args, **kwargs) -> Any:
     """Run a synchronous function in a thread pool with concurrency limiting."""
     async with _sem:
         return await asyncio.to_thread(partial(fn, *args, **kwargs))
+
+
+FILES_ROOT = Path(os.getenv("INVENTREE_MCP_FILES", "~/inventree-mcp-files")).expanduser().resolve()
+
+
+def _safe_path(p: Optional[str]) -> Path:
+    """Resolve p inside FILES_ROOT, rejecting anything that escapes it."""
+    path = (FILES_ROOT / (p or "")).resolve()
+    if not path.is_relative_to(FILES_ROOT):
+        raise ValueError(f"Path must be inside {FILES_ROOT}")
+    return path
+
+
+def _download_path(p: Optional[str]) -> str:
+    """Resolve a download destination inside FILES_ROOT, creating parent dirs."""
+    path = _safe_path(p)
+    (path if p is None or path.is_dir() else path.parent).mkdir(parents=True, exist_ok=True)
+    return str(path)
 
 
 def _serialize(obj) -> dict:
@@ -151,27 +171,8 @@ class InvenTreeClient:
         return _serialize_list(items)
 
     async def part_get_parameter_templates(self) -> list[dict]:
-        """List part parameter templates.
-
-        inventree-python has changed class names across versions; fall back to
-        hitting the REST endpoint directly if the helper class is unavailable.
-        """
-        try:
-            from inventree.part import PartParameterTemplate
-        except Exception:
-            result = await run_sync(self.api.get, "/api/part/parameter-template/")
-            if isinstance(result, dict) and "results" in result:
-                return result["results"]
-            return result if isinstance(result, list) else []
-        try:
-            return await self._list(PartParameterTemplate)
-        except NotImplementedError:
-            # inventree-python can gate some classes by API version; direct REST
-            # call still works against newer servers.
-            result = await run_sync(self.api.get, "/api/part/parameter-template/")
-            if isinstance(result, dict) and "results" in result:
-                return result["results"]
-            return result if isinstance(result, list) else []
+        """List parameter templates (generic across models since API v429)."""
+        return await self._list(ParameterTemplate)
 
     async def part_get_test_templates(self, pk: int) -> list[dict]:
         part = await run_sync(Part, self.api, pk)
@@ -601,19 +602,19 @@ class InvenTreeClient:
             filters["model_type"] = label_type
         return await self._list(LabelTemplate, **filters)
 
-    async def label_download_template(self, template_id: int, destination: str) -> dict:
-        """Download a label template file to destination path."""
+    async def label_download_template(self, template_id: int, destination: str = None) -> dict:
+        """Download a label template file into FILES_ROOT."""
+        dest = _download_path(destination)
         label = await run_sync(LabelTemplate, self.api, template_id)
-        result = await run_sync(label.downloadTemplate, destination, overwrite=True)
-        return {"downloaded": bool(result), "template_id": template_id, "destination": destination}
+        result = await run_sync(label.downloadTemplate, dest)
+        return {"downloaded": bool(result), "template_id": template_id, "destination": dest}
 
-    async def label_print(self, label_type: str, template_id: int, item_ids: list[int]) -> dict:
+    async def label_print(self, template_id: int, item_ids: list[int], plugin: str = None) -> dict:
         """Print labels for items."""
-        label = await run_sync(LabelTemplate, self.api, template_id)
-        ITEM_KEY = {"part": "parts", "stock": "items", "location": "locations"}
-        url = f"{LabelTemplate.URL}{template_id}/print/"
-        key = ITEM_KEY.get(label_type, "items")
-        result = await run_sync(self.api.post, url, {key: item_ids})
+        data = {"template": template_id, "items": item_ids}
+        if plugin:
+            data["plugin"] = plugin
+        result = await run_sync(self.api.post, "label/print/", data)
         return result if isinstance(result, dict) else {"printed": True}
 
     # ── Report operations ────────────────────────────────────────────
@@ -622,16 +623,16 @@ class InvenTreeClient:
         """List available report templates via API."""
         return await self._list(ReportTemplate)
 
-    async def report_download_template(self, template_id: int, destination: str) -> dict:
-        """Download a report template file to destination path."""
+    async def report_download_template(self, template_id: int, destination: str = None) -> dict:
+        """Download a report template file into FILES_ROOT."""
+        dest = _download_path(destination)
         report = await run_sync(ReportTemplate, self.api, template_id)
-        result = await run_sync(report.downloadTemplate, destination, overwrite=True)
-        return {"downloaded": bool(result), "template_id": template_id, "destination": destination}
+        result = await run_sync(report.downloadTemplate, dest)
+        return {"downloaded": bool(result), "template_id": template_id, "destination": dest}
 
-    async def report_print(self, template_id: int, item_ids: list[int], model_type: str) -> dict:
+    async def report_print(self, template_id: int, item_ids: list[int]) -> dict:
         """Print a report for items."""
-        url = f"/api/report/{template_id}/print/"
-        result = await run_sync(self.api.post, url, {"items": item_ids, "model_type": model_type})
+        result = await run_sync(self.api.post, "report/print/", {"template": template_id, "items": item_ids})
         return result if isinstance(result, dict) else {"printed": True}
 
     # ── Attachment operations ────────────────────────────────────────
@@ -655,8 +656,11 @@ class InvenTreeClient:
         cls = MODEL_MAP.get(model_type.lower())
         if not cls:
             raise ValueError(f"Unknown model type: {model_type}")
+        path = _safe_path(file_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
         obj = await run_sync(cls, self.api, model_id)
-        result = await run_sync(obj.uploadAttachment, file_path, comment=comment)
+        result = await run_sync(obj.uploadAttachment, str(path), comment=comment)
         return _serialize(result) if result else {"uploaded": True}
 
     async def attachment_upload_link(self, model_type: str, model_id: int, link: str, comment: str = "") -> dict:
@@ -672,11 +676,12 @@ class InvenTreeClient:
         result = await run_sync(obj.addLinkAttachment, link, comment=comment)
         return _serialize(result) if result else {"uploaded": True}
 
-    async def attachment_download(self, attachment_id: int, destination: str) -> dict:
-        """Download an attachment file to destination path."""
+    async def attachment_download(self, attachment_id: int, destination: str = None) -> dict:
+        """Download an attachment file into FILES_ROOT."""
+        dest = _download_path(destination)
         att = await run_sync(Attachment, self.api, attachment_id)
-        result = await run_sync(att.download, destination, overwrite=True)
-        return {"downloaded": bool(result), "attachment_id": attachment_id, "destination": destination}
+        result = await run_sync(att.download, dest)
+        return {"downloaded": bool(result), "attachment_id": attachment_id, "destination": dest}
 
     async def attachment_delete(self, attachment_id: int) -> dict:
         """Delete an attachment by ID."""
@@ -727,5 +732,5 @@ class InvenTreeClient:
         """List available currencies."""
         result = await run_sync(self.api.get, "/api/currency/exchange/")
         if isinstance(result, dict):
-            return [{"code": k, "rate": v} for k, v in result.items()]
+            return [{"code": k, "rate": v} for k, v in result.get("exchange_rates", {}).items()]
         return []

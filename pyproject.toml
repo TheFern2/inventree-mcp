@@ -5,7 +5,7 @@ description = "MCP server for InvenTree inventory management — 12 tools, 117 o
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.0.0",
-    "inventree>=0.22.0",
+    "inventree>=0.25.0",
     "python-dotenv>=1.0.0",
 ]
 

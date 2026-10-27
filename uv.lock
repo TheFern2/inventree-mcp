@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = ">=3.11"
 
 [[package]]
@@ -322,15 +322,15 @@ wheels = [
 
 [[package]]
 name = "inventree"
-version = "0.22.0"
+version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "requests" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a7/92/da6f07670853092f53bb1e5f6729c1e7a5d09eb086e9f0ca7c14f532694c/inventree-0.22.0.tar.gz", hash = "sha256:e13b2793dfe8eab8df074a694e73bc434e937713b4c4894ec7feeabde7135d0d", size = 46236, upload-time = "2026-02-11T09:56:59.945Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e5/90/2a2b2642999d9f2e408517b1050195b23ca06a432f2fd5aa1ea8bd700aac/inventree-0.25.0.tar.gz", hash = "sha256:eb0361104a2f624070095dea7e6958f8e1126a5633450460d98a571cbef814ca", size = 52041, upload-time = "2026-10-26T10:54:22.613Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/62/d8/cddd146392324bc767929d10b863767aeed272b459a2e0d33ead1aa7504c/inventree-0.22.0-py3-none-any.whl", hash = "sha256:b46c773d8cdd8a02cddb77c697aabda2621f187552316748349198ff1d33755f", size = 32708, upload-time = "2026-02-11T09:56:59.038Z" },
+    { url = "https://files.pythonhosted.org/packages/5e/72/034d3f051eefd4f42cf0258a5e355f6530371c5432172fb6f02371271ce4/inventree-0.25.0-py3-none-any.whl", hash = "sha256:618c153a7116d2ac6f3cf30c7a98dd9a871b5e4af9502b9f814dca2ce87650da", size = 36057, upload-time = "2026-10-26T10:54:21.437Z" },
 ]
 
 [[package]]
@@ -345,7 +345,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "inventree", specifier = ">=0.22.0" },
+    { name = "inventree", specifier = ">=0.25.0" },
     { name = "mcp", specifier = ">=1.0.0" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
