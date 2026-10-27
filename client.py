@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from inventree.api import InvenTreeAPI
-from inventree.part import Part, PartCategory, BomItem, InternalPrice, PartTestTemplate, PartRelated
+from inventree.part import Part, PartCategory, PartCategoryParameterTemplate, BomItem, InternalPrice, PartTestTemplate, PartRelated
 from inventree.stock import StockItem, StockLocation, StockItemTracking, StockItemTestResult
 from inventree.build import Build, BuildLine
 from inventree.purchase_order import PurchaseOrder, PurchaseOrderLineItem, PurchaseOrderExtraLineItem
@@ -22,7 +22,7 @@ from inventree.return_order import ReturnOrder, ReturnOrderLineItem, ReturnOrder
 from inventree.company import Company, Contact, Address, SupplierPart, ManufacturerPart, SupplierPriceBreak
 from inventree.label import LabelTemplate
 from inventree.report import ReportTemplate
-from inventree.base import Attachment, ParameterTemplate
+from inventree.base import Attachment, Parameter, ParameterTemplate
 from inventree.user import User, Group, Owner
 
 logger = logging.getLogger(__name__)
@@ -174,6 +174,24 @@ class InvenTreeClient:
         """List parameter templates (generic across models since API v429)."""
         return await self._list(ParameterTemplate)
 
+    async def part_create_parameter_template(self, data: dict) -> dict:
+        """Create a parameter template, e.g. {"name": "Resistance", "units": "ohm"}."""
+        return await self._create(ParameterTemplate, data)
+
+    async def part_update_parameter_template(self, pk: int, data: dict) -> dict:
+        return await self._update(ParameterTemplate, pk, data)
+
+    async def part_set_parameter(self, pk: int, data: dict) -> dict:
+        """Set a parameter value on a part, updating it if the part already has that template."""
+        template = data.get("template")
+        if template is None:
+            raise ValueError("data must include 'template' (parameter template ID)")
+        existing = await self._list(Parameter, model_type="part.part", model_id=pk, template=template)
+        fields = {k: v for k, v in data.items() if k in ("data", "note")}
+        if existing:
+            return await self._update(Parameter, existing[0]["pk"], fields)
+        return await self._create(Parameter, {"template": template, "model_type": "part.part", "model_id": pk, **fields})
+
     async def part_get_test_templates(self, pk: int) -> list[dict]:
         part = await run_sync(Part, self.api, pk)
         items = await run_sync(part.getTestTemplates)
@@ -212,6 +230,13 @@ class InvenTreeClient:
     async def part_create_category(self, data: dict) -> dict:
         result = await self._create(PartCategory, data)
         return result if isinstance(result, dict) else result[0]
+
+    async def part_update_category(self, pk: int, data: dict) -> dict:
+        return await self._update(PartCategory, pk, data)
+
+    async def part_add_category_parameter(self, pk: int, data: dict) -> dict:
+        """Attach a parameter template to a category, e.g. {"template": 3, "default_value": "0603"}."""
+        return await self._create(PartCategoryParameterTemplate, {"category": pk, **data})
 
     async def part_delete_category(self, pk: int) -> dict:
         return await self._delete(PartCategory, pk)

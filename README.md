@@ -1,6 +1,6 @@
 # InvenTree MCP Server
 
-MCP server for [InvenTree](https://inventree.org) inventory management. Provides 12 parameterized tools covering 117 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration.
+MCP server for [InvenTree](https://inventree.org) inventory management. Provides 12 parameterized tools covering 122 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration.
 
 Tested against InvenTree **1.6.1** (API version 561) with `inventree-python` 0.25.0 and `mcp` 1.26.
 
@@ -152,6 +152,10 @@ have", "create a purchase order for…"). Things worth knowing:
 - **Token changes need a reconnect.** The server connects on the first tool call and keeps that
   connection. After editing the `.env`, run `/mcp` → `inventree` → **Reconnect**, or start a new
   session.
+- **Parameters** (Resistance, Capacitance, Package…): set up templates before entering parts.
+  `part.create_parameter_template` → `part.add_category_parameter` (attaches a template to a
+  category with an optional default, so new parts in it get the parameter) →
+  `part.set_parameter` on each part. Templates are global in InvenTree 1.x, shared across models.
 - **Deleting parts:** InvenTree refuses to delete an active part. Mark it inactive first
   (`part.update` with `{"active": false}`), then delete.
 - **Categories and locations can't be deleted** through the MCP; use the web UI.
@@ -171,7 +175,7 @@ Each tool uses a parameterized `operation` field to select the specific action.
 
 | Tool | Operations | Description |
 |------|-----------|-------------|
-| `part` | 21 | Part & category management (list, get, create, update, delete, BOM, suppliers, parameters) |
+| `part` | 26 | Part & category management (list, get, create, update, delete, BOM, suppliers, parameter templates and values) |
 | `stock` | 16 | Stock item & location management (list, get, create, transfer, count, add, remove) |
 | `build_order` | 9 | Manufacturing build orders (list, get, create, update, allocate, complete, cancel) |
 | `purchase_order` | 12 | Purchase order lifecycle (list, get, create, update, issue, receive, complete) |

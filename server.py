@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""InvenTree MCP Server — 12 parameterized tools, 117 operations.
+"""InvenTree MCP Server — 12 parameterized tools, 122 operations.
 
 Dual transport: STDIO (default) or SSE (pass 'sse' argument).
 Uses inventree-python library wrapped in asyncio.to_thread() for async safety.
@@ -132,12 +132,23 @@ async def part(
         get_manufacturers, get_parameters, get_parameter_templates,
         get_test_templates, get_related, get_builds, get_internal_prices,
         get_sale_prices, list_categories, get_category, get_category_parameters
-      Write: create, update, create_category
+      Write: create, update, create_category, update_category,
+        create_parameter_template, update_parameter_template,
+        add_category_parameter, set_parameter
       Delete: delete
+
+    Parameters (InvenTree 1.x): create templates first, attach them to categories so new
+    parts get them by default, then set values on parts.
+      create_parameter_template: data={"name": "Resistance", "units": "ohm", "description": "..."}
+        (optional: "choices": "0402,0603,0805", "checkbox": true, "model_type": "part")
+      update_parameter_template: pk=template ID, data=fields to change
+      add_category_parameter: pk=category ID, data={"template": <template ID>, "default_value": "..."}
+      set_parameter: pk=part ID, data={"template": <template ID>, "data": "10k", "note": "..."}
+        (updates the value if the part already has that parameter)
 
     Args:
         operation: One of the operations listed above.
-        pk: Part or category ID (required for get/update/delete and sub-queries).
+        pk: Part, category, or parameter template ID (see operations above).
         data: Dict of fields for create/update (e.g. {"name": "Seal Kit", "category": 5}).
         search: Text search filter for list/list_categories.
         category: Category ID filter for list.
@@ -192,6 +203,15 @@ async def part(
     elif operation == "get_parameter_templates":
         return _json(await c.part_get_parameter_templates())
 
+    elif operation == "create_parameter_template":
+        return _json(await c.part_create_parameter_template(data or {}))
+
+    elif operation == "update_parameter_template":
+        return _json(await c.part_update_parameter_template(pk, data or {}))
+
+    elif operation == "set_parameter":
+        return _json(await c.part_set_parameter(pk, data or {}))
+
     elif operation == "get_test_templates":
         return _json(await c.part_get_test_templates(pk))
 
@@ -221,6 +241,12 @@ async def part(
 
     elif operation == "get_category_parameters":
         return _json(await c.part_get_category_parameters(pk))
+
+    elif operation == "update_category":
+        return _json(await c.part_update_category(pk, data or {}))
+
+    elif operation == "add_category_parameter":
+        return _json(await c.part_add_category_parameter(pk, data or {}))
 
     else:
         return _json({"error": f"Unknown operation: {operation}"})
