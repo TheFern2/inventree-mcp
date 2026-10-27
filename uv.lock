@@ -346,7 +346,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "inventree", specifier = ">=0.25.0" },
-    { name = "mcp", specifier = ">=1.0.0" },
+    { name = "mcp", specifier = ">=1.26,<2" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 

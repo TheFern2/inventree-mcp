@@ -11,12 +11,16 @@ import logging
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 
+# Real env vars win, then a .env next to server.py (repo clone), then the per-machine
+# config file (used when installed via uvx, where there is no repo directory).
 load_dotenv()
+load_dotenv(Path(os.getenv("INVENTREE_MCP_ENV", "~/.config/inventree-mcp/.env")).expanduser())
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -46,7 +50,7 @@ async def get_client():
         token = os.getenv("INVENTREE_TOKEN")
         if not url or not token:
             raise RuntimeError(
-                "INVENTREE_URL and INVENTREE_TOKEN must be set in environment"
+                "INVENTREE_URL and INVENTREE_TOKEN must be set (env vars, .env, or ~/.config/inventree-mcp/.env)"
             )
         client = InvenTreeClient(url, token)
         await client.connect()
@@ -1026,7 +1030,7 @@ async def system(
 # Entry point — dual transport
 # ═══════════════════════════════════════════════════════════════════════
 
-if __name__ == "__main__":
+def main():
     transport = sys.argv[1] if len(sys.argv) > 1 else "stdio"
 
     if transport == "sse":
@@ -1037,3 +1041,7 @@ if __name__ == "__main__":
     else:
         logger.info("Starting InvenTree MCP Server on STDIO")
         mcp.run(transport="stdio")
+
+
+if __name__ == "__main__":
+    main()

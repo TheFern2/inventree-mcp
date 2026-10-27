@@ -48,6 +48,32 @@ uv run python server.py
 uv run python server.py sse --port 3074
 ```
 
+### Any machine, straight from GitHub (no clone)
+
+Needs [uv](https://docs.astral.sh/uv/). Put the credentials in a per-machine config file:
+
+```bash
+mkdir -p ~/.config/inventree-mcp
+cat > ~/.config/inventree-mcp/.env <<'EOF'
+INVENTREE_URL=https://your-inventree-instance.example.com
+INVENTREE_TOKEN=your-api-token-here
+EOF
+chmod 600 ~/.config/inventree-mcp/.env
+```
+
+Register it for every Claude Code session on that machine:
+
+```bash
+claude mcp add --scope user inventree -- \
+  uvx --from git+https://github.com/TheFern2/inventree-mcp inventree-mcp
+```
+
+uvx caches the install; run `uv cache clean inventree-mcp` after pushing changes, then restart the
+Claude session to pick them up.
+
+Settings are read from real environment variables first, then a `.env` next to `server.py`,
+then `~/.config/inventree-mcp/.env` (override the location with `INVENTREE_MCP_ENV`).
+
 ### Claude Desktop / MCP client configuration
 
 Add to your MCP client config (e.g. `~/.claude/mcp.json`):
