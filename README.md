@@ -156,6 +156,10 @@ have", "create a purchase order for…"). Things worth knowing:
   `part.create_parameter_template` → `part.add_category_parameter` (attaches a template to a
   category with an optional default, so new parts in it get the parameter) →
   `part.set_parameter` on each part. Templates are global in InvenTree 1.x, shared across models.
+  Creating or editing templates requires a **staff** user (InvenTree checks `is_staff`, not group
+  roles), so the `mcp` user gets 403. Either create templates in the admin UI, or turn on *Is
+  Administrator* for `mcp` while setting them up and turn it off afterwards. Attaching templates to
+  categories (Part Categories: Add) and setting values (Parts: Change) work without staff.
 - **Deleting parts:** InvenTree refuses to delete an active part. Mark it inactive first
   (`part.update` with `{"active": false}`), then delete.
 - **Categories and locations can't be deleted** through the MCP; use the web UI.

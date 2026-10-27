@@ -138,7 +138,9 @@ async def part(
       Delete: delete
 
     Parameters (InvenTree 1.x): create templates first, attach them to categories so new
-    parts get them by default, then set values on parts.
+    parts get them by default, then set values on parts. Creating/updating templates requires
+    a staff user (InvenTree ignores group roles there); a 403 means ask the user to create the
+    template in the InvenTree admin or temporarily make the MCP user staff.
       create_parameter_template: data={"name": "Resistance", "units": "ohm", "description": "..."}
         (optional: "choices": "0402,0603,0805", "checkbox": true, "model_type": "part")
       update_parameter_template: pk=template ID, data=fields to change
