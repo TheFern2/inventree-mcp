@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""InvenTree MCP Server — 12 parameterized tools, 122 operations.
+"""InvenTree MCP Server — 12 parameterized tools, 123 operations.
 
 Dual transport: STDIO (default) or SSE (pass 'sse' argument).
 Uses inventree-python library wrapped in asyncio.to_thread() for async safety.
@@ -283,7 +283,10 @@ async def stock(
       Read: list, get, get_by_location, get_by_part, list_locations,
         get_location, get_tracking, get_test_results
       Write: create, update, transfer, count, add, remove, create_location,
-        upload_test_result
+        update_location, upload_test_result
+
+    update edits a stock item; update_location edits a location (pk=location ID), e.g.
+    data={"structural": true}, {"name": "...", "description": "..."}, {"parent": <location ID>}.
 
     Args:
         operation: One of the operations listed above.
@@ -351,6 +354,9 @@ async def stock(
 
     elif operation == "create_location":
         return _json(await c.stock_create_location(data or {}))
+
+    elif operation == "update_location":
+        return _json(await c.stock_update_location(pk, data or {}))
 
     elif operation == "get_tracking":
         return _json(await c.stock_get_tracking(pk))
