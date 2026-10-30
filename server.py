@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""InvenTree MCP Server — 12 parameterized tools, 128 operations.
+"""InvenTree MCP Server — 13 parameterized tools, 130 operations.
 
 Dual transport: STDIO (default) or SSE (pass 'sse' argument).
 Uses inventree-python library wrapped in asyncio.to_thread() for async safety.
@@ -67,8 +67,12 @@ def _json(data: Any) -> str:
 def _error(e: Exception, context: str = "") -> str:
     """Format an actionable error message for the agent."""
     # inventree-python embeds request headers (incl. the auth token) in exception text
-    msg = re.sub(r"(Token\s+)[^'\"\s,}]+", r"\1[REDACTED]", str(e))
-    if "404" in msg or "not found" in msg.lower():
+    msg = re.sub(r"((?:Token|Bearer)\s+)[^'\"\s,}]+", r"\1[REDACTED]", str(e))
+    if "DIGIKEY_CLIENT" in msg or "DigiKey auth" in msg:
+        hint = "Set DIGIKEY_CLIENT_ID and DIGIKEY_CLIENT_SECRET (developer.digikey.com app, Product Information v4)."
+    elif "DigiKey" in msg:
+        hint = "Check the DigiKey URL or part number; try digikey.search with keywords."
+    elif "404" in msg or "not found" in msg.lower():
         hint = "Check that the ID exists. Use the list/search operation first to find valid IDs."
     elif "403" in msg or "permission" in msg.lower() or "forbidden" in msg.lower():
         hint = "The API token lacks permission for this operation. Check INVENTREE_TOKEN roles."
@@ -102,7 +106,7 @@ def _safe(tool_name: str):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Tool Definitions — 12 parameterized tools
+# Tool Definitions — 13 parameterized tools
 # ═══════════════════════════════════════════════════════════════════════
 
 
@@ -1089,6 +1093,83 @@ async def system(
 
     elif operation == "list_currencies":
         return _json(await c.system_list_currencies())
+
+    else:
+        return _json({"error": f"Unknown operation: {operation}"})
+
+
+# ── DigiKey lookup (read-only, separate API) ──────────────────────────
+
+_digikey = None
+
+
+def get_digikey():
+    """Get or create the DigiKey client singleton."""
+    global _digikey
+    if _digikey is None:
+        from digikey import DigiKeyClient
+
+        client_id = os.getenv("DIGIKEY_CLIENT_ID")
+        client_secret = os.getenv("DIGIKEY_CLIENT_SECRET")
+        if not client_id or not client_secret:
+            raise RuntimeError(
+                "DIGIKEY_CLIENT_ID and DIGIKEY_CLIENT_SECRET must be set (env vars, .env, or ~/.config/inventree-mcp/.env)"
+            )
+        _digikey = DigiKeyClient(client_id, client_secret)
+    return _digikey
+
+
+@mcp.tool(
+    annotations={
+        "title": "DigiKey Part Lookup",
+        "readOnlyHint": True,
+        "destructiveHint": False,
+        "idempotentHint": True,
+        "openWorldHint": True,
+    }
+)
+@_safe("digikey")
+async def digikey(
+    operation: str,
+    query: str,
+    limit: int = 10,
+) -> str:
+    """Look up parts on DigiKey (read-only; nothing is written to InvenTree).
+
+    Operations:
+      lookup: query = DigiKey product URL, DigiKey part number (e.g. 311-0.0HRCT-ND), or
+        manufacturer part number. Returns manufacturer, MPN, description, category path,
+        parameters, datasheet/photo/product URLs, stock, and per-packaging variations
+        (DigiKey part number, minimum order quantity, price breaks).
+      search: query = keywords (e.g. "10k 0603 resistor 1%"); returns up to `limit` short
+        results to pick from, then call lookup on the chosen one.
+
+    Adding a DigiKey part to InvenTree (use the returned values, never guess them):
+      1. part.create with name/description from the lookup (category as the user wants).
+      2. company "DigiKey" (is_supplier) and the manufacturer (is_manufacturer) must exist;
+         create them if company.list doesn't find them.
+      3. company.create_manufacturer_part: manufacturer, MPN = manufacturer_part_number.
+      4. company.create_supplier_part: supplier = DigiKey, SKU = the variation's
+         digikey_part_number (usually the Cut Tape one for small quantities),
+         link = product_url, manufacturer_part, pack_quantity if relevant.
+      5. company.add_price_break for each of that variation's price_breaks.
+      6. Optional: part.set_parameter for parameters whose templates already exist.
+
+    Args:
+        operation: lookup or search.
+        query: URL / part number for lookup, keywords for search.
+        limit: Max results for search (default 10, max 50).
+
+    Returns:
+        JSON string with DigiKey product data or {"error": "..."}.
+    """
+    dk = get_digikey()
+
+    if operation == "lookup":
+        return _json(await dk.lookup(query))
+
+    elif operation == "search":
+        return _json(await dk.search(query, limit))
 
     else:
         return _json({"error": f"Unknown operation: {operation}"})

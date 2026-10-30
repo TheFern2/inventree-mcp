@@ -1,6 +1,6 @@
 # InvenTree MCP Server
 
-MCP server for [InvenTree](https://inventree.org) inventory management. Provides 12 parameterized tools covering 128 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration.
+MCP server for [InvenTree](https://inventree.org) inventory management. Provides 13 parameterized tools covering 130 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration, plus a read-only DigiKey lookup for adding parts from real supplier data.
 
 Tested against InvenTree **1.6.1** (API version 561) with `inventree-python` 0.25.0 and `mcp` 1.26.
 
@@ -39,6 +39,9 @@ different file to override the last location.
 | `INVENTREE_MCP_FILES` | no | `~/inventree-mcp-files` | Directory that file operations are confined to |
 | `INVENTREE_MCP_ENV` | no | `~/.config/inventree-mcp/.env` | Location of the config file |
 | `LOG_LEVEL` | no | `INFO` | Python log level (logs go to stderr) |
+| `DIGIKEY_CLIENT_ID` | for `digikey` | | DigiKey API app client ID |
+| `DIGIKEY_CLIENT_SECRET` | for `digikey` | | DigiKey API app client secret |
+| `DIGIKEY_SITE` / `DIGIKEY_LANGUAGE` / `DIGIKEY_CURRENCY` | no | `US` / `en` / `USD` | Locale for DigiKey prices and text |
 
 ### 2. Register with Claude Code
 
@@ -52,8 +55,15 @@ claude mcp add --scope user inventree -- \
 Without `--scope user` the server is only registered for the directory you ran the command in.
 Check it with `claude mcp list` or `/mcp` inside a session.
 
-uvx caches the install. To pick up new commits, run `uv cache clean inventree-mcp` and start a new
-session.
+uvx caches the install. To pick up new commits, refresh it once, then reconnect (`/mcp` →
+`inventree` → Reconnect) or start a new session:
+
+```bash
+uvx --refresh --from git+https://github.com/TheFern2/inventree-mcp inventree-mcp < /dev/null
+```
+
+It builds the latest commit, starts the server and exits immediately (stdin is empty). Avoid
+`uv cache clean`: it waits until every running `uvx` server (from any session or MCP) has exited.
 
 ### From a clone (for development)
 
@@ -144,6 +154,30 @@ The hook guards against the agent deleting things by mistake (or because of inst
 in a part's notes). It is not a security boundary: it only runs in Claude Code, on machines where
 you added it, and anything that can read the `.env` file has the token.
 
+## DigiKey lookup
+
+The `digikey` tool looks parts up through DigiKey's official Product Information API v4, so part
+numbers, specs and price breaks come from DigiKey instead of being guessed from a web page. It is
+read-only; the agent then uses the `part` and `company` tools to create the part, supplier part,
+manufacturer part and price breaks.
+
+Setup (once):
+
+1. Create a free account at [developer.digikey.com](https://developer.digikey.com), create an
+   organization, then a **production** app with the **Product Information V4** API enabled.
+2. Add its credentials to `~/.config/inventree-mcp/.env`:
+
+   ```
+   DIGIKEY_CLIENT_ID=...
+   DIGIKEY_CLIENT_SECRET=...
+   ```
+3. Reconnect the MCP.
+
+Then ask e.g. "add https://www.digikey.com/en/products/detail/... to the Resistors category".
+`lookup` accepts a product URL, a DigiKey part number or a manufacturer part number; `search` takes
+keywords. DigiKey limits free apps to a daily number of requests, which is plenty for adding
+parts by hand.
+
 ## Using it
 
 Ask in plain language ("list parts in the Fasteners category", "how much stock of M3 screws do we
@@ -191,10 +225,12 @@ Each tool uses a parameterized `operation` field to select the specific action.
 | `report` | 3 | Report template listing and generation |
 | `attachment` | 5 | File attachments on any object (upload, download, delete) |
 | `system` | 9 | Health, version, settings, users, groups, owners, project codes, currencies |
+| `digikey` | 2 | Read-only DigiKey product lookup and keyword search |
 
 ## Architecture
 
-- **`server.py`** — FastMCP server with 12 parameterized tools and dual transport (STDIO/SSE)
+- **`server.py`** — FastMCP server with 13 parameterized tools and dual transport (STDIO/SSE)
+- **`digikey.py`** — Async client for DigiKey's Product Information API v4 (client-credentials OAuth, token cached until expiry)
 - **`client.py`** — Async adapter wrapping the official [inventree-python](https://github.com/inventree/inventree-python) library via `asyncio.to_thread()` with a semaphore for concurrency control
 
 The `inventree-python` library is synchronous (requests-based). All calls are offloaded to threads to maintain async compatibility with the MCP framework.
