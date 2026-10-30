@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""InvenTree MCP Server — 13 parameterized tools, 130 operations.
+"""InvenTree MCP Server — 13 parameterized tools, 131 operations.
 
 Dual transport: STDIO (default) or SSE (pass 'sse' argument).
 Uses inventree-python library wrapped in asyncio.to_thread() for async safety.
@@ -138,8 +138,12 @@ async def part(
         get_sale_prices, list_categories, get_category, get_category_parameters
       Write: create, update, create_category, update_category,
         create_parameter_template, update_parameter_template,
-        add_category_parameter, set_parameter
+        add_category_parameter, set_parameter, set_image
       Delete: delete
+
+    set_image: pk=part ID, data={"url": "https://..."} downloads the image (https, public
+      hosts, image content-type, max 5 MB) and sets it as the part's image, e.g. a DigiKey
+      lookup's photo_url. Replaces any existing image.
 
     Parameters (InvenTree 1.x): create templates first, attach them to categories so new
     parts get them by default, then set values on parts. Creating/updating templates requires
@@ -217,6 +221,9 @@ async def part(
 
     elif operation == "set_parameter":
         return _json(await c.part_set_parameter(pk, data or {}))
+
+    elif operation == "set_image":
+        return _json(await c.part_set_image(pk, (data or {}).get("url")))
 
     elif operation == "get_test_templates":
         return _json(await c.part_get_test_templates(pk))
@@ -1156,7 +1163,10 @@ async def digikey(
          digikey_part_number (usually the Cut Tape one for small quantities),
          link = product_url, manufacturer_part, pack_quantity if relevant.
       5. company.add_price_break for each of that variation's price_breaks.
-      6. Optional: part.set_parameter for parameters whose templates already exist.
+      6. part.set_image with data={"url": photo_url}, if photo_url is set.
+      7. attachment.upload_link with model_type="part", model_id=<part ID>,
+         link=datasheet_url, comment="Datasheet", if datasheet_url is set.
+      8. Optional: part.set_parameter for parameters whose templates already exist.
 
     Args:
         operation: lookup or search.

@@ -5,11 +5,18 @@ semaphore to limit concurrent thread usage.
 """
 
 import asyncio
+import ipaddress
 import json
 import logging
+import mimetypes
 import os
+import socket
+import tempfile
 from functools import partial
 from pathlib import Path
+from urllib.parse import unquote, urljoin, urlparse
+
+import httpx
 from typing import Any, Optional
 
 from inventree.api import InvenTreeAPI
@@ -52,6 +59,48 @@ def _download_path(p: Optional[str]) -> str:
     path = _safe_path(p)
     (path if p is None or path.is_dir() else path.parent).mkdir(parents=True, exist_ok=True)
     return str(path)
+
+
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def _check_public_https(url: str) -> None:
+    """Reject anything but https URLs whose host resolves only to public addresses."""
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError(f"Image URL must be https: {url}")
+    for info in socket.getaddrinfo(parsed.hostname, parsed.port or 443, proto=socket.IPPROTO_TCP):
+        addr = ipaddress.ip_address(info[4][0])
+        if not addr.is_global:
+            raise ValueError(f"Image URL host resolves to a non-public address: {parsed.hostname}")
+
+
+async def _fetch_image(url: str) -> tuple[bytes, str]:
+    """Download an image (https, public hosts only, <= MAX_IMAGE_BYTES). Returns (bytes, filename)."""
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False) as http:
+        for _ in range(5):
+            await asyncio.to_thread(_check_public_https, url)
+            async with http.stream("GET", url, headers={"User-Agent": "inventree-mcp"}) as r:
+                if r.is_redirect:
+                    url = urljoin(url, r.headers["location"])
+                    continue
+                if r.status_code != 200:
+                    raise RuntimeError(f"Image download failed ({r.status_code}): {url}")
+                ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
+                if not ctype.startswith("image/"):
+                    raise ValueError(f"URL is not an image (content-type {ctype or 'unknown'}): {url}")
+                chunks, size = [], 0
+                async for chunk in r.aiter_bytes():
+                    size += len(chunk)
+                    if size > MAX_IMAGE_BYTES:
+                        raise ValueError(f"Image larger than {MAX_IMAGE_BYTES // (1024 * 1024)} MB: {url}")
+                    chunks.append(chunk)
+                name = Path(unquote(urlparse(url).path)).name
+                ext = mimetypes.guess_extension(ctype) or ".img"
+                if not name or Path(name).suffix.lower() not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"):
+                    name = f"image{ext}"
+                return b"".join(chunks), name
+        raise RuntimeError(f"Too many redirects: {url}")
 
 
 def _serialize(obj) -> dict:
@@ -191,6 +240,20 @@ class InvenTreeClient:
         if existing:
             return await self._update(Parameter, existing[0]["pk"], fields)
         return await self._create(Parameter, {"template": template, "model_type": "part.part", "model_id": pk, **fields})
+
+    async def part_set_image(self, pk: int, url: str) -> dict:
+        """Download an image from a public https URL and set it as the part's image."""
+        if not url:
+            raise ValueError("data must include 'url' (https image URL, e.g. a DigiKey photo_url)")
+        content, name = await _fetch_image(url)
+        part = await run_sync(Part, self.api, pk)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, name)
+            with open(path, "wb") as f:
+                f.write(content)
+            await run_sync(part.uploadImage, path)
+        await run_sync(part.reload)
+        return {"pk": pk, "image": part._data.get("image"), "bytes": len(content), "source": url}
 
     async def part_get_test_templates(self, pk: int) -> list[dict]:
         part = await run_sync(Part, self.api, pk)

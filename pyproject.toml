@@ -1,7 +1,7 @@
 [project]
 name = "inventree-mcp"
 version = "1.0.0"
-description = "MCP server for InvenTree inventory management — 13 tools, 130 operations"
+description = "MCP server for InvenTree inventory management — 13 tools, 131 operations"
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=1.26,<2",

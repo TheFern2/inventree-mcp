@@ -1,6 +1,6 @@
 # InvenTree MCP Server
 
-MCP server for [InvenTree](https://inventree.org) inventory management. Provides 13 parameterized tools covering 130 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration, plus a read-only DigiKey lookup for adding parts from real supplier data.
+MCP server for [InvenTree](https://inventree.org) inventory management. Provides 13 parameterized tools covering 131 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration, plus a read-only DigiKey lookup for adding parts from real supplier data.
 
 Tested against InvenTree **1.6.1** (API version 561) with `inventree-python` 0.25.0 and `mcp` 1.26.
 
@@ -158,8 +158,9 @@ you added it, and anything that can read the `.env` file has the token.
 
 The `digikey` tool looks parts up through DigiKey's official Product Information API v4, so part
 numbers, specs and price breaks come from DigiKey instead of being guessed from a web page. It is
-read-only; the agent then uses the `part` and `company` tools to create the part, supplier part,
-manufacturer part and price breaks.
+read-only; the agent then uses the `part`, `company` and `attachment` tools to create the part,
+supplier part, manufacturer part and price breaks, set the part image from DigiKey's photo
+(`part.set_image`) and add the datasheet as a link attachment.
 
 Setup (once):
 
@@ -213,7 +214,7 @@ Each tool uses a parameterized `operation` field to select the specific action.
 
 | Tool | Operations | Description |
 |------|-----------|-------------|
-| `part` | 26 | Part & category management (list, get, create, update, delete, BOM, suppliers, parameter templates and values) |
+| `part` | 27 | Part & category management (list, get, create, update, delete, image from URL, BOM, suppliers, parameter templates and values) |
 | `stock` | 17 | Stock item & location management (list, get, create, update, transfer, count, add, remove) |
 | `build_order` | 9 | Manufacturing build orders (list, get, create, update, allocate, complete, cancel) |
 | `purchase_order` | 12 | Purchase order lifecycle (list, get, create, update, issue, receive, complete) |
