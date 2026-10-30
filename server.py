@@ -1141,8 +1141,11 @@ async def digikey(
         manufacturer part number. Returns manufacturer, MPN, description, category path,
         parameters, datasheet/photo/product URLs, stock, and per-packaging variations
         (DigiKey part number, minimum order quantity, price breaks).
-      search: query = keywords (e.g. "10k 0603 resistor 1%"); returns up to `limit` short
-        results to pick from, then call lookup on the chosen one.
+      search: query = keywords; returns up to `limit` short results (exact matches first) to
+        pick from, then call lookup on the chosen one. Matching is literal, so keep it short:
+        a part number or a few spec terms ("LM358", "10k 0603 1%"), not a sentence.
+      A manufacturer part number can map to several DigiKey listings; pass the DigiKey part
+      number when the exact listing matters.
 
     Adding a DigiKey part to InvenTree (use the returned values, never guess them):
       1. part.create with name/description from the lookup (category as the user wants).
