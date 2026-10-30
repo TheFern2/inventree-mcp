@@ -577,6 +577,21 @@ class InvenTreeClient:
     async def company_get_manufacturer_part(self, pk: int) -> dict:
         return await self._get(ManufacturerPart, pk)
 
+    async def company_create_supplier_part(self, data: dict) -> dict:
+        return await self._create(SupplierPart, data)
+
+    async def company_update_supplier_part(self, pk: int, data: dict) -> dict:
+        return await self._update(SupplierPart, pk, data)
+
+    async def company_create_manufacturer_part(self, data: dict) -> dict:
+        return await self._create(ManufacturerPart, data)
+
+    async def company_update_manufacturer_part(self, pk: int, data: dict) -> dict:
+        return await self._update(ManufacturerPart, pk, data)
+
+    async def company_add_price_break(self, supplier_part_id: int, data: dict) -> dict:
+        return await self._create(SupplierPriceBreak, {"part": supplier_part_id, **data})
+
     async def company_list_contacts(self, company_id: int) -> list[dict]:
         return await self._list(Contact, company=company_id)
 

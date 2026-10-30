@@ -1,6 +1,6 @@
 # InvenTree MCP Server
 
-MCP server for [InvenTree](https://inventree.org) inventory management. Provides 12 parameterized tools covering 123 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration.
+MCP server for [InvenTree](https://inventree.org) inventory management. Provides 12 parameterized tools covering 128 operations for parts, stock, build orders, purchase/sales/return orders, companies, barcodes, labels, reports, attachments, and system administration.
 
 Tested against InvenTree **1.6.1** (API version 561) with `inventree-python` 0.25.0 and `mcp` 1.26.
 
@@ -185,7 +185,7 @@ Each tool uses a parameterized `operation` field to select the specific action.
 | `purchase_order` | 12 | Purchase order lifecycle (list, get, create, update, issue, receive, complete) |
 | `sales_order` | 14 | Sales order lifecycle (list, get, create, shipments, allocations) |
 | `return_order` | 8 | Return order management |
-| `company` | 12 | Suppliers, manufacturers, customers, contacts, addresses |
+| `company` | 17 | Suppliers, manufacturers, customers, supplier/manufacturer parts, price breaks |
 | `barcode` | 4 | Barcode scan, assign, unassign, lookup |
 | `label` | 5 | Label template listing and printing |
 | `report` | 3 | Report template listing and generation |

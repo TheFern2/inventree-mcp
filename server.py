@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""InvenTree MCP Server — 12 parameterized tools, 123 operations.
+"""InvenTree MCP Server — 12 parameterized tools, 128 operations.
 
 Dual transport: STDIO (default) or SSE (pass 'sse' argument).
 Uses inventree-python library wrapped in asyncio.to_thread() for async safety.
@@ -706,6 +706,7 @@ async def company(
     data: dict = None,
     company_id: int = None,
     supplier_part_id: int = None,
+    part_id: int = None,
     search: str = None,
     is_supplier: bool = None,
     is_manufacturer: bool = None,
@@ -719,15 +720,29 @@ async def company(
       Read: list, get, list_supplier_parts, get_supplier_part,
         list_manufacturer_parts, get_manufacturer_part, list_contacts,
         list_addresses, get_price_breaks
-      Write: create, update
+      Write: create, update, create_supplier_part, update_supplier_part,
+        create_manufacturer_part, update_manufacturer_part, add_price_break
       Delete: delete
+
+    Linking a part to where it's bought (check list_supplier_parts with part_id first to avoid
+    duplicates):
+      1. The supplier/manufacturer must exist as a company: create with
+         data={"name": "Amazon", "is_supplier": true, "website": "https://www.amazon.com"}.
+      2. Optional, when the maker's part number matters: create_manufacturer_part with
+         data={"part": <part ID>, "manufacturer": <company ID>, "MPN": "RC0603FR-0710KL", "link": "..."}.
+      3. create_supplier_part with data={"part": <part ID>, "supplier": <company ID>,
+         "SKU": "<supplier's order code, e.g. Amazon ASIN>", "link": "<product URL>",
+         "manufacturer_part": <manufacturer part ID, optional>, "pack_quantity": "100", "note": "..."}.
+      4. Optional price: add_price_break with supplier_part_id and
+         data={"quantity": 1, "price": 5.99, "price_currency": "USD"}.
 
     Args:
         operation: One of the operations listed above.
-        pk: Company, supplier part, or manufacturer part ID.
+        pk: Company, supplier part, or manufacturer part ID (for get/update operations).
         data: Dict of fields for create/update.
         company_id: Company ID for list_supplier_parts/list_manufacturer_parts/list_contacts/list_addresses.
-        supplier_part_id: Supplier part ID for get_price_breaks.
+        supplier_part_id: Supplier part ID for get_price_breaks/add_price_break.
+        part_id: Part ID filter for list_supplier_parts/list_manufacturer_parts.
         search: Text search filter for list/list_supplier_parts/list_manufacturer_parts.
         is_supplier/is_manufacturer/is_customer: Boolean filters for list.
         limit: Max results (default 25).
@@ -766,6 +781,8 @@ async def company(
         filters = {}
         if company_id is not None:
             filters["supplier"] = company_id
+        if part_id is not None:
+            filters["part"] = part_id
         if search:
             filters["search"] = search
         return _json(await c.company_list_supplier_parts(**filters))
@@ -777,6 +794,8 @@ async def company(
         filters = {}
         if company_id is not None:
             filters["manufacturer"] = company_id
+        if part_id is not None:
+            filters["part"] = part_id
         if search:
             filters["search"] = search
         return _json(await c.company_list_manufacturer_parts(**filters))
@@ -792,6 +811,21 @@ async def company(
 
     elif operation == "get_price_breaks":
         return _json(await c.company_get_price_breaks(supplier_part_id or pk))
+
+    elif operation == "create_supplier_part":
+        return _json(await c.company_create_supplier_part(data or {}))
+
+    elif operation == "update_supplier_part":
+        return _json(await c.company_update_supplier_part(pk, data or {}))
+
+    elif operation == "create_manufacturer_part":
+        return _json(await c.company_create_manufacturer_part(data or {}))
+
+    elif operation == "update_manufacturer_part":
+        return _json(await c.company_update_manufacturer_part(pk, data or {}))
+
+    elif operation == "add_price_break":
+        return _json(await c.company_add_price_break(supplier_part_id or pk, data or {}))
 
     else:
         return _json({"error": f"Unknown operation: {operation}"})
